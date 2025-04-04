@@ -1,7 +1,7 @@
 # Design Review
 
 ## Low-fidelity sketches
-![Initial Wireframe Sketch](./img/sketch-wireframe.jpg)  
+
 *(Add brief caption explaining your sketch - example: "Hand-drawn concept showing filter panel, deal cards grid, and sales indicators")*
 
 ## List of taken considerations for sketches/design
