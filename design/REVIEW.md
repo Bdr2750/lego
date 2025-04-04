@@ -1,8 +1,7 @@
 # Design Review
 
 ## Low-fidelity sketches
-
-*(Add brief caption explaining your sketch - example: "Hand-drawn concept showing filter panel, deal cards grid, and sales indicators")*
+In the design folder
 
 ## List of taken considerations for sketches/design
 1. **Mobile-first approach**  
