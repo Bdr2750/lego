@@ -1,4 +1,6 @@
 /* eslint-disable no-console, no-process-exit */
+const fs = require('fs').promises;
+const path = require('path');
 const dealabsScraper = require('./src/scrapers/websites/dealabs');
 const vintedScraper = require('./src/scrapers/websites/vinted');
 const briqueAvenueScraper = require('./src/scrapers/websites/avenuedelabrique');
@@ -47,6 +49,22 @@ async function runScraper(targetWebsite) {
     } else {
       console.log('Extracted Information:');
       console.log(JSON.stringify(scrapedResults, null, 2)); // Format output with indentation
+      
+      // Save results to JSON file
+      const dataDir = path.resolve(__dirname, 'data');
+      await fs.mkdir(dataDir, { recursive: true }).catch(() => {});
+      
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      let source = 'unknown';
+      if (targetWebsite.includes('dealabs.com')) source = 'dealabs';
+      else if (targetWebsite.includes('vinted.fr')) source = 'vinted';
+      else if (targetWebsite.includes('avenuedelabrique.com')) source = 'avenuedelabrique';
+      
+      const filename = `${source}_${timestamp}.json`;
+      const filePath = path.join(dataDir, filename);
+      
+      await fs.writeFile(filePath, JSON.stringify(scrapedResults, null, 2));
+      console.log(`Results saved to: ${filePath}`);
     }
     
     console.log('Process completed successfully ✅');

@@ -2,6 +2,7 @@ const fetch = require('node-fetch');
 const cheerio = require('cheerio');
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+const fs = require('fs').promises; 
 
 // Enable stealth plugin to avoid detection
 puppeteer.use(StealthPlugin());
@@ -344,3 +345,59 @@ async function runTests() {
 
 // Run the tests
 runTests();
+async function runTests() {
+  console.log("==== Testing Dealabs Scraper ====");
+  const dealabsUrl = "https://www.dealabs.com/search?q=promotions";
+  console.log(`Testing URL: ${dealabsUrl}`);
+  const dealabsResults = await scrape(dealabsUrl);
+  
+  if (dealabsResults && dealabsResults.length > 0) {
+    console.log(`\n✅ Found ${dealabsResults.length} deals on Dealabs`);
+    
+    // Save Dealabs results
+    try {
+      await fs.writeFile('dealabs_results.json', JSON.stringify(dealabsResults, null, 2));
+      console.log('Saved to dealabs_results.json');
+    } catch (err) {
+      console.error('Error saving Dealabs results:', err);
+    }
+
+    console.log("\nSample data (first 3 items):");
+    dealabsResults.slice(0, 3).forEach((item, index) => {
+      console.log(`\nItem ${index + 1}:`);
+      console.log(`  Title: ${item.title}`);
+      console.log(`  Price: ${item.price}`);
+      console.log(`  Temperature: ${item.temperature}°`);
+      console.log(`  Comments: ${item.commentsCount}`);
+      console.log(`  Free Shipping: ${item.freeShipping ? 'Yes' : 'No'}`);
+      console.log(`  Link: ${item.link}`);
+    });
+  }
+
+  console.log("\n\n==== Testing Vinted Scraper ====");
+  const vintedUrl = "https://www.vinted.fr/vetements?search_text=vetements";
+  console.log(`Testing URL: ${vintedUrl}`);
+  const vintedResults = await scrape(vintedUrl);
+  
+  if (vintedResults && vintedResults.length > 0) {
+    console.log(`\n✅ Found ${vintedResults.length} items on Vinted`);
+    
+    // Save Vinted results
+    try {
+      await fs.writeFile('vinted_results.json', JSON.stringify(vintedResults, null, 2));
+      console.log('Saved to vinted_results.json');
+    } catch (err) {
+      console.error('Error saving Vinted results:', err);
+    }
+
+    console.log("\nSample data (first 3 items):");
+    vintedResults.slice(0, 3).forEach((item, index) => {
+      console.log(`\nItem ${index + 1}:`);
+      console.log(`  Title: ${item.title}`);
+      console.log(`  Price: ${item.price}`);
+      console.log(`  Size: ${item.size || 'N/A'}`);
+      console.log(`  Brand: ${item.brand || 'N/A'}`);
+      console.log(`  Link: ${item.link}`);
+    });
+  }
+}
