@@ -1,201 +1,416 @@
-'use strict';
-
-let currentDeals = [];
-let currentPagination = {};
-let filters = {
-  bestDiscount: false,
-  mostCommented: false,
-  hotDeals: false,
-  favorites: false
-};
-
-// Selectors for existing elements in the new design
-const selectShow = document.querySelector('#show-select');
-const selectPage = document.querySelector('#page-select');
-const sortSelect = document.querySelector('#sort-select'); // Now part of the HTML
-const dealsContainer = document.querySelector('#deals');
-const spanNbDeals = document.querySelector('#nbDeals');
-const dealsCount = document.querySelector('#deals-count');
-
-const setCurrentDeals = ({ result, meta }) => {
-  currentDeals = result;
-  currentPagination = meta;
-  
-  // Update the total deals count display
-  spanNbDeals.textContent = result.length;
-  if (dealsCount) {
-    dealsCount.textContent = `(${result.length} total)`;
-  }
-  
-  // Update page selector based on pagination
-  if (meta.totalPages) {
-    updatePageSelector(meta.totalPages, meta.currentPage);
-  }
-};
-
-const updatePageSelector = (totalPages, currentPage) => {
-  selectPage.innerHTML = '';
-  for (let i = 1; i <= totalPages; i++) {
-    const option = document.createElement('option');
-    option.value = i;
-    option.textContent = `Page ${i}`;
-    if (i === currentPage) {
-      option.selected = true;
-    }
-    selectPage.appendChild(option);
-  }
-};
-
-const fetchDeals = async (page = 1, size = 6) => {
-  try {
-    const response = await fetch(
-      `https://lego-api-blue.vercel.app/deals?page=${page}&size=${size}`
-    );
-    const body = await response.json();
-    return body.success ? body.data : { result: [], meta: {} };
-  } catch (error) {
-    console.error(error);
-    return { result: [], meta: {} };
-  }
-};
-
-const applyFiltersAndSorting = (deals) => {
-  let filtered = [...deals];
-  if (filters.bestDiscount) filtered = filtered.filter(d => d.discount > 50);
-  if (filters.mostCommented) filtered = filtered.filter(d => d.comments > 15);
-  if (filters.hotDeals) filtered = filtered.filter(d => d.temperature > 100);
-  if (filters.favorites) {
-    const favs = JSON.parse(localStorage.getItem('favorites') || '[]');
-    filtered = filtered.filter(d => favs.includes(d.uuid));
-  }
-
-  switch(sortSelect.value) {
-    case 'price-asc': filtered.sort((a, b) => a.price - b.price); break;
-    case 'price-desc': filtered.sort((a, b) => b.price - a.price); break;
-    case 'date-asc': filtered.sort((a, b) => new Date(a.date) - new Date(b.date)); break;
-    case 'date-desc': filtered.sort((a, b) => new Date(b.date) - new Date(a.date)); break;
-  }
-  
-  return filtered;
-};
-
-const renderDeals = (deals) => {
-  const favs = JSON.parse(localStorage.getItem('favorites') || '[]');
-  
-  if (deals.length === 0) {
-    dealsContainer.innerHTML = '<div class="no-deals">No deals found matching your criteria</div>';
-    return;
-  }
-  
-  const template = deals.map(deal => `
-    <div class="deal-item">
-      <div class="deal-thumbnail">🧱</div>
-      <div class="deal-content">
-        <span class="deal-id">ID: ${deal.id}</span>
-        <a href="${deal.link}" class="deal-title" target="_blank">${deal.title}</a>
-        <div class="deal-price">$${deal.price}</div>
-        <div class="deal-meta">
-          ${deal.discount ? `<span class="deal-discount">-${deal.discount}%</span>` : ''}
-          ${deal.temperature ? `<span class="deal-temp">${deal.temperature}°</span>` : ''}
-          ${deal.comments ? `<span class="deal-comments">${deal.comments} comments</span>` : ''}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧱 Lego | Predictability of a lego set deal</title>
+    <style>
+      :root {
+        --primary: #E30613;
+        --secondary: #FFD700;
+        --dark: #212121;
+        --light: #f8f9fa;
+        --success: #198754;
+        --grey: #6c757d;
+        --border-radius: 8px;
+        --box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        --transition: all 0.3s ease;
+      }
+      
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      }
+      
+      body {
+        background-color: #f5f5f7;
+        color: var(--dark);
+        line-height: 1.6;
+        padding: 0;
+        margin: 0;
+      }
+      
+      header {
+        background: var(--primary);
+        color: white;
+        padding: 1.5rem;
+        text-align: center;
+        position: relative;
+        box-shadow: var(--box-shadow);
+      }
+      
+      header h1 {
+        font-size: 2.5rem;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      
+      header h1:before {
+        content: "🧱";
+        margin-right: 10px;
+        font-size: 2rem;
+      }
+      
+      .container {
+        max-width: 1200px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      
+      .card {
+        background: white;
+        border-radius: var(--border-radius);
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: var(--box-shadow);
+      }
+      
+      .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        border-bottom: 2px solid #f1f1f1;
+        padding-bottom: 0.5rem;
+      }
+      
+      .card-header h2 {
+        font-size: 1.5rem;
+        color: var(--primary);
+        margin: 0;
+      }
+      
+      .filters-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1rem;
+      }
+      
+      .filter-group {
+        display: flex;
+        flex-direction: column;
+      }
+      
+      .filter-group label {
+        margin-bottom: 0.5rem;
+        font-weight: bold;
+        color: var(--dark);
+      }
+      
+      select, button {
+        padding: 0.75rem;
+        border-radius: var(--border-radius);
+        border: 1px solid #ddd;
+        background-color: white;
+        font-size: 1rem;
+        transition: var(--transition);
+      }
+      
+      select:focus, button:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 2px rgba(227, 6, 19, 0.2);
+      }
+      
+      .filter-options {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin: 1rem 0;
+      }
+      
+      .filter-checkbox {
+        display: flex;
+        align-items: center;
+        background: #f1f1f1;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        cursor: pointer;
+        transition: var(--transition);
+      }
+      
+      .filter-checkbox:hover {
+        background: #e1e1e1;
+      }
+      
+      .filter-checkbox input {
+        margin-right: 0.5rem;
+      }
+      
+      .deals-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.5rem;
+      }
+      
+      .deal-item {
+        background: white;
+        border-radius: var(--border-radius);
+        overflow: hidden;
+        box-shadow: var(--box-shadow);
+        transition: var(--transition);
+        position: relative;
+        border: 1px solid #eee;
+      }
+      
+      .deal-item:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+      }
+      
+      .deal-thumbnail {
+        height: 180px;
+        background-color: #f1f1f1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--grey);
+        font-size: 3rem;
+        border-bottom: 1px solid #eee;
+      }
+      
+      .deal-content {
+        padding: 1rem;
+      }
+      
+      .deal-title {
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+        color: var(--dark);
+        text-decoration: none;
+        display: block;
+      }
+      
+      .deal-title:hover {
+        color: var(--primary);
+      }
+      
+      .deal-price {
+        font-size: 1.25rem;
+        color: var(--success);
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+      }
+      
+      .deal-id {
+        color: var(--grey);
+        font-size: 0.85rem;
+      }
+      
+      .deal-meta {
+        display: flex;
+        gap: 0.5rem;
+        margin: 0.5rem 0;
+        flex-wrap: wrap;
+      }
+      
+      .deal-meta span {
+        background: #f1f1f1;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.85rem;
+      }
+      
+      .deal-discount {
+        background: var(--success) !important;
+        color: white;
+      }
+      
+      .deal-temp {
+        background: #ff9800 !important;
+        color: white;
+      }
+      
+      .deal-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 1rem;
+        border-top: 1px solid #f1f1f1;
+        padding-top: 0.5rem;
+      }
+      
+      .deal-date {
+        font-size: 0.85rem;
+        color: var(--grey);
+      }
+      
+      .favorite-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 1.5rem;
+        transition: var(--transition);
+        padding: 0;
+      }
+      
+      .favorite-btn:hover {
+        transform: scale(1.2);
+      }
+      
+      .indicators-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+      }
+      
+      .indicator-item {
+        background: white;
+        border-radius: var(--border-radius);
+        padding: 1rem;
+        box-shadow: var(--box-shadow);
+        text-align: center;
+        border-left: 4px solid var(--primary);
+      }
+      
+      .indicator-label {
+        font-size: 0.9rem;
+        color: var(--grey);
+        margin-bottom: 0.5rem;
+      }
+      
+      .indicator-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: var(--dark);
+      }
+      
+      .pagination {
+        display: flex;
+        justify-content: center;
+        margin-top: 2rem;
+      }
+      
+      .no-deals {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 2rem;
+        background: #f9f9f9;
+        border-radius: var(--border-radius);
+        color: var(--grey);
+      }
+      
+      @media (max-width: 768px) {
+        .filters-grid {
+          grid-template-columns: 1fr;
+        }
+        
+        .deals-container {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Lego Deals Tracker</h1>
+    </header>
+    
+    <div class="container">
+      <div class="card">
+        <div class="card-header">
+          <h2>Filter Options</h2>
         </div>
-        <div class="deal-actions">
-          <button class="favorite-btn" data-uuid="${deal.uuid}" 
-                  style="color: ${favs.includes(deal.uuid) ? 'red' : 'grey'}">❤️</button>
-          <span class="deal-date">${formatDate(deal.date)}</span>
+        <div class="filters-grid">
+          <div class="filter-group">
+            <label for="show-select">Show per page:</label>
+            <select name="show" id="show-select">
+              <option value="6">6</option>
+              <option value="12">12</option>
+              <option value="24">24</option>
+            </select>
+          </div>
+          
+          <div class="filter-group">
+            <label for="page-select">Go to page:</label>
+            <select name="page" id="page-select"></select>
+          </div>
+          
+          <div class="filter-group">
+            <label for="sort-select">Sort by:</label>
+            <select name="sort" id="sort-select">
+              <option value="price-asc">Price: Low to High</option>
+              <option value="price-desc">Price: High to Low</option>
+              <option value="date-asc">Date: Oldest First</option>
+              <option value="date-desc">Date: Newest First</option>
+            </select>
+          </div>
+          
+          <div class="filter-group">
+            <label for="lego-set-id-select">Lego set ID:</label>
+            <select id="lego-set-id-select"></select>
+          </div>
+        </div>
+        
+        <div class="filter-options" id="filters">
+          <label class="filter-checkbox">
+            <input type="checkbox" class="filter" data-filter="bestDiscount">
+            >50% Discount
+          </label>
+          <label class="filter-checkbox">
+            <input type="checkbox" class="filter" data-filter="mostCommented">
+            >15 Comments
+          </label>
+          <label class="filter-checkbox">
+            <input type="checkbox" class="filter" data-filter="hotDeals">
+            >100° Temperature
+          </label>
+          <label class="filter-checkbox">
+            <input type="checkbox" class="filter" data-filter="favorites">
+            Favorites
+          </label>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-header">
+          <h2>Key Indicators</h2>
+        </div>
+        <div class="indicators-grid">
+          <div class="indicator-item">
+            <div class="indicator-label">Number of Deals</div>
+            <div class="indicator-value" id="nbDeals">0</div>
+          </div>
+          <div class="indicator-item">
+            <div class="indicator-label">Number of Sales</div>
+            <div class="indicator-value" id="nbSales">0</div>
+          </div>
+          <div class="indicator-item">
+            <div class="indicator-label">P5 Sales Price</div>
+            <div class="indicator-value">0</div>
+          </div>
+          <div class="indicator-item">
+            <div class="indicator-label">P25 Sales Price</div>
+            <div class="indicator-value">0</div>
+          </div>
+          <div class="indicator-item">
+            <div class="indicator-label">P50 Sales Price</div>
+            <div class="indicator-value">0</div>
+          </div>
+          <div class="indicator-item">
+            <div class="indicator-label">Lifetime Value</div>
+            <div class="indicator-value">10 days</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-header">
+          <h2>Deals</h2>
+          <span id="deals-count"></span>
+        </div>
+        <div class="deals-container" id="deals">
+          <!-- Deals will be populated here by JavaScript -->
         </div>
       </div>
     </div>
-  `).join('');
-  
-  dealsContainer.innerHTML = template;
-};
 
-// Helper function to format dates
-const formatDate = (dateString) => {
-  if (!dateString) return '';
-  
-  const date = new Date(dateString);
-  if (isNaN(date)) return dateString;
-  
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  });
-};
-
-// Update Lego set ID selector with unique IDs
-const updateLegoSetIdSelector = (deals) => {
-  const legoSetIdSelect = document.querySelector('#lego-set-id-select');
-  if (!legoSetIdSelect) return;
-  
-  // Get unique set IDs using the utility function
-  const ids = getIdsFromDeals(deals);
-  const uniqueIds = [...new Set(ids)].filter(id => id); // Remove empty IDs
-  
-  legoSetIdSelect.innerHTML = '<option value="">All Sets</option>';
-  uniqueIds.forEach(id => {
-    const option = document.createElement('option');
-    option.value = id;
-    option.textContent = id;
-    legoSetIdSelect.appendChild(option);
-  });
-};
-
-// Event listeners
-document.addEventListener('DOMContentLoaded', async () => {
-  // Initial load
-  const data = await fetchDeals();
-  setCurrentDeals(data);
-  
-  const filteredDeals = applyFiltersAndSorting(data.result);
-  renderDeals(filteredDeals);
-  updateLegoSetIdSelector(data.result);
-});
-
-selectShow.addEventListener('change', async (e) => {
-  const data = await fetchDeals(currentPagination.currentPage || 1, parseInt(e.target.value));
-  setCurrentDeals(data);
-  renderDeals(applyFiltersAndSorting(data.result));
-});
-
-selectPage.addEventListener('change', async (e) => {
-  const data = await fetchDeals(parseInt(e.target.value), parseInt(selectShow.value));
-  setCurrentDeals(data);
-  renderDeals(applyFiltersAndSorting(data.result));
-});
-
-// Handle lego set id filtering
-document.querySelector('#lego-set-id-select')?.addEventListener('change', (e) => {
-  const selectedId = e.target.value;
-  
-  if (selectedId) {
-    renderDeals(applyFiltersAndSorting(currentDeals.filter(deal => deal.id === selectedId)));
-  } else {
-    renderDeals(applyFiltersAndSorting(currentDeals));
-  }
-});
-
-document.addEventListener('click', (e) => {
-  // Handle favorite toggles
-  if (e.target.classList.contains('favorite-btn')) {
-    const favs = JSON.parse(localStorage.getItem('favorites') || '[]');
-    const uuid = e.target.dataset.uuid;
-    const newFavs = favs.includes(uuid) ? favs.filter(id => id !== uuid) : [...favs, uuid];
-    localStorage.setItem('favorites', JSON.stringify(newFavs));
-    e.target.style.color = newFavs.includes(uuid) ? 'red' : 'grey';
-  }
-});
-
-// Filter checkbox event listeners
-document.querySelectorAll('.filter').forEach(checkbox => {
-  checkbox.addEventListener('change', (e) => {
-    filters[e.target.dataset.filter] = e.target.checked;
-    renderDeals(applyFiltersAndSorting(currentDeals));
-  });
-});
-
-sortSelect.addEventListener('change', () => {
-  renderDeals(applyFiltersAndSorting(currentDeals));
-});
+    <script type="text/javascript" charset="UTF-8" src="utils.js"></script>
+    <script type="text/javascript" charset="UTF-8" src="portfolio.js"></script>
+  </body>
+</html>
